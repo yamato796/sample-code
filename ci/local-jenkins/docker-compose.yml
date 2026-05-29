@@ -1,0 +1,62 @@
+# Local smoke-test environment for the take-home pipeline.
+#
+# Run from this directory:
+#   docker compose up --build
+#
+# Then:
+#   - Jenkins:        http://localhost:8080   (admin / admin)
+#   - Blue Ocean:     http://localhost:8080/blue
+#   - Local registry: http://localhost:5000
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ci-local/jenkins:local
+    container_name: jenkins
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ssh_keys:/ssh-keys
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Bind-mount config files so changes take effect on restart
+      # without wiping the volume (preserves build records).
+      - ./casc.yaml:/var/jenkins_home/casc.yaml:ro
+      - ./seed.groovy:/var/jenkins_home/seed.groovy:ro
+      - ./jobs.json:/var/jenkins_home/jobs.json:ro
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400
+      - GITHUB_PAT=${GITHUB_PAT:-}
+    depends_on:
+      - registry
+
+  # Build agent — runs CI jobs. Master (numExecutors: 0) only orchestrates.
+  # In production this would be 5 separate EC2 instances; here we run one
+  # container to demonstrate the master/agent split.
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    image: ci-local/agent:local
+    container_name: agent-1
+    volumes:
+      - ssh_keys:/ssh-keys:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - jenkins
+
+  registry:
+    image: registry:2
+    container_name: registry
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+
+volumes:
+  jenkins_home:
+  registry_data:
+  ssh_keys:

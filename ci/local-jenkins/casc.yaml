@@ -1,0 +1,149 @@
+# Jenkins Configuration as Code for the local smoke-test environment.
+#
+# Everything that would normally be clicked through the Jenkins UI is declared
+# here. Reviewers can `docker compose up`, log in as admin/admin, and run the
+# pre-seeded pipeline job without any manual setup.
+
+jenkins:
+  systemMessage: "CI take-home: local CI smoke-test environment."
+  numExecutors: 0        # master does not run builds — agents do.
+  mode: EXCLUSIVE
+  scmCheckoutRetryCount: 2
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: admin
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  nodes:
+    # Local demo: one agent container (docker-compose service "agent").
+    # In production, add 5 permanent agents or use EC2/Kubernetes cloud plugin.
+    - permanent:
+        name: "agent-1"
+        remoteFS: "/home/jenkins"
+        numExecutors: 5        # headroom above the 3+ concurrent minimum;
+                               # throttle/lock controls docker contention.
+        labelString: "linux-docker"
+        retentionStrategy: "always"
+        launcher:
+          ssh:
+            host: "agent"      # docker-compose service name
+            port: 22
+            credentialsId: "agent-ssh-key"
+            sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
+    # Scale out: add more permanent agents with the same pattern.
+    # - permanent:
+    #     name: "agent-2"
+    #     numExecutors: 5
+    #     labelString: "linux-docker"
+    #     launcher:
+    #       ssh:
+    #         host: "10.0.1.12"
+    #         credentialsId: "agent-ssh-key"
+
+  # --- Alternative: EC2 Cloud Plugin (dynamic agents) ---
+  # Agents are launched on-demand and terminated after idle timeout.
+  # No fixed fleet — scales to zero when idle, up to instanceCap at peak.
+  # Pipeline code does not change: `agent { label 'linux-docker' }` works
+  # the same way with both permanent and cloud agents.
+  #
+  # clouds:
+  #   - amazonEC2:
+  #       name: "aws-ec2"
+  #       region: "ap-northeast-1"
+  #       useInstanceProfileForCredentials: true
+  #       templates:
+  #         - ami: "ami-xxxxx"              # pre-baked with Docker + Java
+  #           type: "t3.xlarge"
+  #           securityGroups: "sg-jenkins-agent"
+  #           subnetId: "subnet-private-a"
+  #           iamInstanceProfile: "arn:aws:iam::123456789012:instance-profile/JenkinsAgent"
+  #           labelString: "linux-docker"
+  #           numExecutors: 5
+  #           idleTerminationMinutes: "10"
+  #           instanceCap: 5
+  #           remoteAdmin: "ec2-user"
+  #           connectionStrategy: PRIVATE_IP
+  #           initScript: |
+  #             #!/bin/bash
+  #             systemctl start docker
+  #             usermod -aG docker ec2-user
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: CI_ECR_REGISTRY
+            value: "localhost:5000"
+          - key: CI_AWS_REGION
+            value: "ap-northeast-1"
+          - key: CI_ECR_PUSH_ROLE_ARN
+            value: "arn:aws:iam::987654321098:role/JenkinsEcrPush"
+          - key: CI_AGENT_LABEL
+            value: "linux-docker"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "github-pat"
+              secret: "${GITHUB_PAT}"
+              description: "GitHub Personal Access Token"
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: "agent-ssh-key"
+              username: "jenkins"
+              description: "SSH key for build agents"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/ssh-keys/agent-key}"
+
+unclassified:
+  gitHubPluginConfig:
+    configs:
+      - name: "GitHub"
+        apiUrl: "https://api.github.com"
+        credentialsId: "github-pat"
+        manageHooks: false
+
+  globalLibraries:
+    libraries:
+      - name: "ci-shared-library"
+        defaultVersion: "main"
+        implicit: false
+        allowVersionOverride: true
+        retriever:
+          modernSCM:
+            libraryPath: "ci/shared-library"
+            scm:
+              github:
+                repoOwner: "yamato796"
+                repository: "sample-code"
+                configuredByUrl: true
+                repositoryUrl: "https://github.com/yamato796/sample-code.git"
+                traits:
+                  - gitBranchDiscovery
+
+  throttleJobProperty:
+    categories:
+      - categoryName: "docker-build"
+        maxConcurrentPerNode: 0    # 0 = no per-node limit (lock handles this)
+        maxConcurrentTotal: 5      # cluster-wide cap: 5 nodes = 5 concurrent builds
+
+  lockableResourcesManager:
+    declaredResources:
+      - name: "docker-agent-1"
+        description: "Docker daemon access on agent-1"
+
+  timestamper:
+    allPipelines: true
+
+jobs:
+  - file: /var/jenkins_home/seed.groovy

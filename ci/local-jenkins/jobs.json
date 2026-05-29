@@ -1,0 +1,26 @@
+[
+  {
+    "name": "simple-go-server",
+    "type": "multibranch",
+    "owner": "yamato796",
+    "repo": "sample-code",
+    "url": "https://github.com/yamato796/sample-code.git",
+    "pipeline": "ci/pipelines/ci.groovy"
+  },
+  {
+    "name": "simple-go-server-test",
+    "type": "pipeline",
+    "url": "https://github.com/yamato796/sample-code.git",
+    "branch": "*/main",
+    "pipeline": "ci/pipelines/test.groovy",
+    "trigger": false
+  },
+  {
+    "name": "simple-go-server-build-image",
+    "type": "pipeline",
+    "url": "https://github.com/yamato796/sample-code.git",
+    "branch": "*/main",
+    "pipeline": "ci/pipelines/build-image.groovy",
+    "trigger": false
+  }
+]

@@ -1,0 +1,48 @@
+# Local smoke-test environment for the take-home pipeline.
+#
+# Run from this directory:
+#   docker compose up --build
+#
+# Then:
+#   - Jenkins:       http://localhost:8080   (admin / admin)
+#   - Local registry: http://localhost:5000
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ruckus-take-home/jenkins:local
+    container_name: ruckus-jenkins
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      # Persist Jenkins home between runs.
+      - jenkins_home:/var/jenkins_home
+
+      # Share the host's docker daemon so `docker build` and `docker push`
+      # work inside the Jenkins container. Production agents should use
+      # Kaniko / Buildah / DinD sidecar instead.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400
+      # Optional: set GITHUB_PAT to enable GitHub API integration.
+      # Without it Jenkins still works, but uses pollSCM instead of webhooks.
+      # export GITHUB_PAT=ghp_xxx && docker compose up
+      - GITHUB_PAT=${GITHUB_PAT:-}
+    depends_on:
+      - registry
+
+  registry:
+    # Stand-in for AWS ECR.
+    image: registry:2
+    container_name: ruckus-local-registry
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+
+volumes:
+  jenkins_home:
+  registry_data:

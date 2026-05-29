@@ -1,0 +1,31 @@
+# Pipeline core
+workflow-aggregator
+pipeline-stage-view
+pipeline-graph-view
+
+# SCM + GitHub integration
+git
+github
+github-branch-source
+
+# Docker
+docker-workflow
+
+# Resource control
+lockable-resources
+throttle-concurrents
+
+# UI
+blueocean
+timestamper
+ws-cleanup
+
+# Configuration as Code
+configuration-as-code
+job-dsl
+
+# AWS (for production ECR auth; not exercised in local mode)
+pipeline-aws
+
+# Auth (so the JCasC user definition is honored)
+matrix-auth

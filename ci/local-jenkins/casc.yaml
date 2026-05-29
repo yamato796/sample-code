@@ -1,0 +1,101 @@
+# Jenkins Configuration as Code for the local smoke-test environment.
+#
+# Everything that would normally be clicked through the Jenkins UI is declared
+# here. Reviewers can `docker compose up`, log in as admin/admin, and run the
+# pre-seeded pipeline job without any manual setup.
+
+jenkins:
+  systemMessage: "RUCKUS take-home: local CI smoke-test environment."
+  numExecutors: 3      # represents one of the 5 nodes during a busy peak (3+
+                       # concurrent slots, matching the assignment's wording).
+  mode: NORMAL
+  scmCheckoutRetryCount: 2
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: admin
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  nodes: []
+
+  globalNodeProperties:
+    - envVars:
+        env:
+          # Infrastructure defaults read by pipeline scripts via env vars.
+          - key: RUCKUS_ECR_REGISTRY
+            value: "localhost:5000"
+          - key: RUCKUS_AWS_REGION
+            value: "ap-northeast-1"
+          - key: RUCKUS_ECR_PUSH_ROLE_ARN
+            value: "arn:aws:iam::987654321098:role/JenkinsEcrPush"
+          - key: RUCKUS_AGENT_LABEL
+            value: "linux-docker"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "github-pat"
+              secret: "${GITHUB_PAT}"
+              description: "GitHub Personal Access Token"
+
+unclassified:
+  gitHubPluginConfig:
+    configs:
+      - name: "GitHub"
+        apiUrl: "https://api.github.com"
+        credentialsId: "github-pat"
+        manageHooks: false       # true in production (auto-creates webhooks)
+
+  # Shared library for reusable pipeline steps (e.g. ecrPush).
+  globalLibraries:
+    libraries:
+      - name: "ruckus-ci-shared"
+        defaultVersion: "main"
+        implicit: false
+        allowVersionOverride: true
+        retriever:
+          modernSCM:
+            libraryPath: "ci/shared-library"
+            scm:
+              github:
+                repoOwner: "yamato796"
+                repository: "sample-code"
+                configuredByUrl: true
+                repositoryUrl: "https://github.com/yamato796/sample-code.git"
+                traits:
+                  - gitBranchDiscovery
+
+  # Throttle category used by pipeline scripts to cap concurrent
+  # docker-build jobs across the cluster. In production with 5 nodes this
+  # would be set to ~5-6; locally we allow 2 to exercise the mechanism.
+  throttleJobProperty:
+    categories:
+      - categoryName: "docker-build"
+        maxConcurrentPerNode: 1
+        maxConcurrentTotal: 2
+
+  lockableResourcesManager:
+    declaredResources:
+      - name: "docker-built-in"
+        description: "Docker daemon access on the built-in node"
+
+  timestamper:
+    allPipelines: true
+
+jobs:
+  - script: |
+      import jenkins.model.*
+      Jenkins.instance.setLabelString('linux-docker')
+      Jenkins.instance.save()
+
+  # Job definitions live in seed.groovy, separate from infra config.
+  - file: /var/jenkins_home/seed.groovy

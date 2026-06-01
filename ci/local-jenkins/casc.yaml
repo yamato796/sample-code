@@ -95,7 +95,13 @@ credentials:
               scope: GLOBAL
               id: "github-pat"
               secret: "${GITHUB_PAT}"
-              description: "GitHub Personal Access Token"
+              description: "GitHub PAT (secret text, for GitHub plugin config)"
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-pat-up"
+              username: "yamato796"
+              password: "${GITHUB_PAT}"
+              description: "GitHub PAT (username/password, for branch source)"
           - basicSSHUserPrivateKey:
               scope: GLOBAL
               id: "agent-ssh-key"

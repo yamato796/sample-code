@@ -19,7 +19,7 @@ pipeline {
         stage('Test') {
             steps {
                 build job: "${serviceName}-test",
-                      parameters: [string(name: 'GIT_REF', value: env.BRANCH_NAME ?: 'main')],
+                      parameters: [string(name: 'GIT_REF', value: env.CHANGE_BRANCH ?: env.BRANCH_NAME ?: 'main')],
                       wait: true
             }
         }
@@ -27,7 +27,7 @@ pipeline {
         stage('Build Image') {
             steps {
                 build job: "${serviceName}-build-image",
-                      parameters: [string(name: 'GIT_REF', value: env.BRANCH_NAME ?: 'main')],
+                      parameters: [string(name: 'GIT_REF', value: env.CHANGE_BRANCH ?: env.BRANCH_NAME ?: 'main')],
                       wait: true
             }
         }

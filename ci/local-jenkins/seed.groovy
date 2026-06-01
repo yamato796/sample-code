@@ -16,6 +16,7 @@ jobs.each { j ->
                             repository(j.repo)
                             repositoryUrl(j.url)
                             configuredByUrl(true)
+                            credentialsId('github-pat-up')
                             traits {
                                 gitBranchDiscovery()
                                 gitHubPullRequestDiscovery {
